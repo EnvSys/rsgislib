@@ -107,51 +107,53 @@ Example::
         rsgislib.imageutils.popImageStats(outputFile, usenodataval=True, nodataval=noDataVal, calcpyramids=True)
 
 
-
 def calcClearSkyRegions(cloudsImg, validAreaImg, outputClearSkyMask, outFormat, tmpPath='./tmpClearSky', deleteTmpFiles=True, initClearSkyRegionDist=5000, initClearSkyRegionMinSize=3000, finalClearSkyRegionDist=1000, morphSize=21):
     """
-Given a cloud mask, identify the larger extent regions of useful clear-sky regions.
+    Given a cloud mask, identify the larger extent regions of useful clear-sky regions.
 
-:param cloudsImg: An image with the input mask of the cloud (pixel == 1) and shadow (pixel == 2)
-:param validAreaImg: A mask of the image data area (1 = valid and 0 = not-valid; i.e., outside of the data area)
-:param outputClearSkyMask: The output mask of the clear sky areas
-:param outFormat: The output image format.
-:param tmpPath: The path for temporay images produced during the processing to be stored (Default: './tmpClearSky'; Note. all temp files are generated as KEA files).
-:param deleteTmpFiles: Boolean as to whether the intermediate files should be deleted following processing (Default: True - delete files).
-:param initClearSkyRegionDist: The distance in metres from a cloud/shadow object for the initial identification of clear sky regions (Default: 5000)
-:param initClearSkyRegionMinSize: The minimum size (in pixels) of the initial clear sky regions (Default: 3000 pixels)
-:param finalClearSkyRegionDist: The distance in metres from a cloud/shadow object for the final boundaries of the clear sky regions (Default: 1000)
-:param morphSize: the size of the circular morphological operator used to tidy up the result (Default: 21)
+    :param cloudsImg: An image with the input mask of the cloud (pixel == 1) and shadow (pixel == 2)
+    :param validAreaImg: A mask of the image data area (1 = valid and 0 = not-valid; i.e., outside of the data area)
+    :param outputClearSkyMask: The output mask of the clear sky areas
+    :param outFormat: The output image format.
+    :param tmpPath: The path for temporay images produced during the processing to be stored (Default: './tmpClearSky'; Note. all temp files are generated as KEA files).
+    :param deleteTmpFiles: Boolean as to whether the intermediate files should be deleted following processing (Default: True - delete files).
+    :param initClearSkyRegionDist: The distance in metres from a cloud/shadow object for the initial identification of clear sky regions (Default: 5000)
+    :param initClearSkyRegionMinSize: The minimum size (in pixels) of the initial clear sky regions (Default: 3000 pixels)
+    :param finalClearSkyRegionDist: The distance in metres from a cloud/shadow object for the final boundaries of the clear sky regions (Default: 1000)
+    :param morphSize: the size of the circular morphological operator used to tidy up the result (Default: 21)
 
-Example::
+    Example::
 
-    import rsgislib.imagecalibration
-    cloudsImg = "./Outputs/LS8_20160605_lat52lon261_r24p203_clouds.kea"
-    validAreaImg = "./Outputs/LS8_20160605_lat52lon261_r24p203_valid.kea"
-    outputMask = "./Outputs/LS8_20160605_lat52lon261_r24p203_openskyvalid.kea"
-    tmpPath = "./temp"
-    rsgislib.imagecalibration.calcClearSkyRegions(cloudsImg, validAreaImg, outputMask, 'KEA', tmpPath)
+        import rsgislib.imagecalibration
+        cloudsImg = "./Outputs/LS8_20160605_lat52lon261_r24p203_clouds.kea"
+        validAreaImg = "./Outputs/LS8_20160605_lat52lon261_r24p203_valid.kea"
+        outputMask = "./Outputs/LS8_20160605_lat52lon261_r24p203_openskyvalid.kea"
+        tmpPath = "./temp"
+        rsgislib.imagecalibration.calcClearSkyRegions(cloudsImg, validAreaImg, outputMask, 'KEA', tmpPath)
 
-"""
+    """
     
-    import rsgislib
     import rsgislib.imagecalc
-    import rsgislib.imageutils
     import rsgislib.segmentation
     import rsgislib.rastergis
-    import rsgislib.vectorutils
     import rsgislib.imagemorphology
     import os.path
     import osgeo.gdal as gdal
     from rios import rat
     import numpy
+
+    if not os.path.isdir(tmpPath):
+        os.makedirs(tmpPath)
     
     if morphSize % 2 == 0:
         raise rsgislib.RSGISPyException("The size of the morphology operator must be odd.")
+
+    # if temp files are to be deleted, don't calculate unnecessary data when performing image stats
+    calc_colours = not deleteTmpFiles
+    calc_pyramids = not deleteTmpFiles
     
     baseDataName = os.path.splitext(os.path.basename(cloudsImg))[0]  
     tmpCloudsImgDist2Clouds = os.path.join(tmpPath, baseDataName+"_dist2clouds.kea")
-    tmpCloudsImgDist2CloudsNoData = os.path.join(tmpPath, baseDataName+"_dist2clouds_masked.kea")
     tmpInitClearSkyRegions = os.path.join(tmpPath, baseDataName+"initclearsky.kea")
     tmpInitClearSkyRegionsClumps = os.path.join(tmpPath, baseDataName+"initclearskyClumps.kea")
     tmpInitClearSkyRegionsRmSmall = os.path.join(tmpPath, baseDataName+"initclearskyClumpsRMSmall.kea")
@@ -164,40 +166,38 @@ Example::
     tmpClearSkyRegionsFullExtentSelectClumpsOpenClumpRMSmall = os.path.join(tmpPath, baseDataName+"clearskyClumpsFullExtentSelectClumpsOpenClumpRMSmall.kea")
     tmpMorphOperator = os.path.join(tmpPath, 'CircularMorphOp.gmtxt')
     
-    rsgislib.imagecalc.calcDist2ImgVals(cloudsImg, tmpCloudsImgDist2Clouds, pxlVals=[1,2])
-        
-    rsgislib.imageutils.maskImage(tmpCloudsImgDist2Clouds, validAreaImg, tmpCloudsImgDist2CloudsNoData, 'KEA', rsgislib.TYPE_32INT, -1, 0)    
-            
-    rsgislib.imagecalc.imageMath(tmpCloudsImgDist2CloudsNoData, tmpInitClearSkyRegions, 'b1 > '+str(initClearSkyRegionDist), outFormat, rsgislib.TYPE_32UINT)
+    rsgislib.imagecalc.calcDist2ImgVals(cloudsImg, tmpCloudsImgDist2Clouds, pxlVals=[1, 2])
+
+    rsgislib.imagecalc.imageMath(tmpCloudsImgDist2Clouds, tmpInitClearSkyRegions, 'b1 > ' + str(initClearSkyRegionDist), 'KEA', rsgislib.TYPE_32UINT)
     
     rsgislib.segmentation.clump(tmpInitClearSkyRegions, tmpInitClearSkyRegionsClumps, 'KEA', False, 0.0, False)
     
-    rsgislib.rastergis.populateStats(tmpInitClearSkyRegionsClumps, True, True)
+    rsgislib.rastergis.populateStats(tmpInitClearSkyRegionsClumps, calc_colours, calc_pyramids)
     
     rsgislib.segmentation.rmSmallClumps(tmpInitClearSkyRegionsClumps, tmpInitClearSkyRegionsRmSmall, initClearSkyRegionMinSize, 'KEA')
     
     rsgislib.segmentation.relabelClumps(tmpInitClearSkyRegionsRmSmall, tmpInitClearSkyRegionsFinal, 'KEA', False)
     
-    rsgislib.rastergis.populateStats(tmpInitClearSkyRegionsFinal, True, True)
+    rsgislib.rastergis.populateStats(tmpInitClearSkyRegionsFinal, calc_colours, calc_pyramids)
     
-    rsgislib.imagecalc.imageMath(tmpCloudsImgDist2CloudsNoData, tmpClearSkyRegionsFullExtent, 'b1 > '+str(finalClearSkyRegionDist), outFormat, rsgislib.TYPE_32UINT)
+    rsgislib.imagecalc.imageMath(tmpCloudsImgDist2Clouds, tmpClearSkyRegionsFullExtent, 'b1 > '+str(finalClearSkyRegionDist), 'KEA', rsgislib.TYPE_32UINT)
     
     rsgislib.segmentation.clump(tmpClearSkyRegionsFullExtent, tmpClearSkyRegionsFullExtentClumps, 'KEA', False, 0.0, False)
     
-    rsgislib.rastergis.populateStats(tmpClearSkyRegionsFullExtentClumps, True, True)
+    rsgislib.rastergis.populateStats(tmpClearSkyRegionsFullExtentClumps, calc_colours, calc_pyramids)
     
     rsgislib.rastergis.populateRATWithStats(tmpInitClearSkyRegionsFinal, tmpClearSkyRegionsFullExtentClumps, [rsgislib.rastergis.BandAttStats(band=1, maxField='InitRegionInter')])
     
-    ratDataset = gdal.Open( tmpClearSkyRegionsFullExtentClumps, gdal.GA_Update )
+    ratDataset = gdal.Open(tmpClearSkyRegionsFullExtentClumps, gdal.GA_Update)
     InitRegionInter = rat.readColumn(ratDataset, "InitRegionInter")
     ValidClumps = numpy.zeros_like(InitRegionInter, dtype=numpy.dtype('int'))
-    ValidClumps[InitRegionInter>0] = 1
+    ValidClumps[InitRegionInter > 0] = 1
     rat.writeColumn(ratDataset, "ValidClumps", ValidClumps)
     ratDataset = None
     
     rsgislib.rastergis.collapseRAT(tmpClearSkyRegionsFullExtentClumps, 'ValidClumps', tmpClearSkyRegionsFullExtentSelectClumps, 'KEA', 1)
     
-    rsgislib.rastergis.populateStats(tmpClearSkyRegionsFullExtentSelectClumps, True, True)
+    rsgislib.rastergis.populateStats(tmpClearSkyRegionsFullExtentSelectClumps, calc_colours, calc_pyramids)
     
     rsgislib.imagemorphology.createCircularOp(outputFile=tmpMorphOperator, opSize=morphSize)
     
@@ -205,16 +205,16 @@ Example::
     
     rsgislib.segmentation.clump(tmpClearSkyRegionsFullExtentSelectClumpsOpen, tmpClearSkyRegionsFullExtentSelectClumpsOpenClump, 'KEA', False, 0.0, False)
     
-    rsgislib.rastergis.populateStats(tmpClearSkyRegionsFullExtentSelectClumpsOpenClump, True, True)
+    rsgislib.rastergis.populateStats(tmpClearSkyRegionsFullExtentSelectClumpsOpenClump, calc_colours, calc_pyramids)
 
     rsgislib.segmentation.rmSmallClumps(tmpClearSkyRegionsFullExtentSelectClumpsOpenClump, tmpClearSkyRegionsFullExtentSelectClumpsOpenClumpRMSmall, initClearSkyRegionMinSize, 'KEA')
-    
-    rsgislib.imagecalc.imageMath(tmpClearSkyRegionsFullExtentSelectClumpsOpenClumpRMSmall, outputClearSkyMask, "b1>0?1:0", outFormat, rsgislib.TYPE_8UINT)
+
+    bandDefns = [rsgislib.imagecalc.BandDefn('b1', tmpClearSkyRegionsFullExtentSelectClumpsOpenClumpRMSmall, 1), rsgislib.imagecalc.BandDefn('mask', validAreaImg, 1)]
+    rsgislib.imagecalc.bandMath(outputClearSkyMask, "mask==0?0:(b1>0)", outFormat, rsgislib.TYPE_8UINT, bandDefns)
         
     if deleteTmpFiles:
         rsgisUtils = rsgislib.RSGISPyUtils()
         rsgisUtils.deleteFileWithBasename(tmpCloudsImgDist2Clouds)
-        rsgisUtils.deleteFileWithBasename(tmpCloudsImgDist2CloudsNoData)
         rsgisUtils.deleteFileWithBasename(tmpInitClearSkyRegions)
         rsgisUtils.deleteFileWithBasename(tmpInitClearSkyRegionsClumps)
         rsgisUtils.deleteFileWithBasename(tmpInitClearSkyRegionsRmSmall)
