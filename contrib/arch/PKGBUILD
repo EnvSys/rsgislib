@@ -27,7 +27,9 @@ package() {
         cd "$pkgname-$pkgver"
         make DESTDIR="$pkgdir/" install
         local site_packages=$(python3.8 -c "import site; print(site.getsitepackages()[0])")
+        local existing_python_site_dir=$(echo $pkgdir/usr/lib/python*)
         mkdir -p "$pkgdir/$site_packages/$pkgname-$pkgver.dist-info"
-        mv $pkgdir/usr/lib/python*/site-packages/rsgislib $pkgdir/$site_packages/rsgislib
+        mv "$existing_python_site_dir/site-packages/rsgislib" "$pkgdir/$site_packages/rsgislib"
+        rmdir "$existing_python_site_dir/site-packages" "$existing_python_site_dir"
         touch "$pkgdir/$site_packages/$pkgname-$pkgver.dist-info/METADATA"
 }
