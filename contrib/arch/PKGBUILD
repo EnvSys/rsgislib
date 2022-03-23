@@ -29,7 +29,9 @@ package() {
         local site_packages=$(python3.8 -c "import site; print(site.getsitepackages()[0])")
         local existing_python_site_dir=$(echo $pkgdir/usr/lib/python*)
         mkdir -p "$pkgdir/$site_packages/$pkgname-$pkgver.dist-info"
-        mv "$existing_python_site_dir/site-packages/rsgislib" "$pkgdir/$site_packages/rsgislib"
-        rmdir "$existing_python_site_dir/site-packages" "$existing_python_site_dir"
+        if [ "$existing_python_site_dir/site_packages" != "$site_packages" ]; then
+            mv "$existing_python_site_dir/site-packages/rsgislib" "$pkgdir/$site_packages/rsgislib"
+            rmdir "$existing_python_site_dir/site-packages" "$existing_python_site_dir"
+        fi
         touch "$pkgdir/$site_packages/$pkgname-$pkgver.dist-info/METADATA"
 }
